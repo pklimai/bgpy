@@ -8,10 +8,6 @@ PORT = 179
 MY_AS = 65500
 MY_HOLDTIME = 90
 
-# Example what we received without sending anything:
-# b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff  \x00\x1d  \x01  \x04\xfd\xe8\x00Z\n\x00\x00\x01\x00
-#   \xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff  \x00\x15  \x03  \x04\x00'
-
 MSG_TYPE_OPEN = 1
 MSG_TYPE_UPDATE = 2
 MSG_TYPE_NOTIFICATION = 3
@@ -32,25 +28,44 @@ class WrongValue(Exception):
     pass
 
 
+def get_word(lst):
+    if len(lst) != 2:
+        raise WrongValue
+    return lst[0] * 256 + lst[1]
+
+
 def read_message_from_bgp_socket(s):
     data_msg_header = s.recv(BGP_HEADER_LENGTH)
     print("Received raw: ", repr(data_msg_header))
-    msg_length = data_msg_header[16] * 256 + data_msg_header[17]
+    msg_length = get_word(data_msg_header[16:18])
     print("Message length: ", msg_length)
     msg_type = data_msg_header[18]
     print("Message type: {} ({})".format(msg_type, MSG_TYPE_NAMES[msg_type]))
     if msg_length > BGP_HEADER_LENGTH:
         data_msg_remaining = s.recv(msg_length - BGP_HEADER_LENGTH)
         print("Received raw, remainder: ", repr(data_msg_remaining))
-        if msg_type == 1:
+        if msg_type == MSG_TYPE_OPEN:
             print("Open message: version {}".format(data_msg_remaining[0]))
-            print("  AS {}".format(data_msg_remaining[1]*256 + data_msg_remaining[2]))
-            print("  Hold time {}".format(data_msg_remaining[3] * 256 + data_msg_remaining[4]))
+            print("  AS {}".format(get_word(data_msg_remaining[1:3])))
+            print("  Hold time {}".format(get_word(data_msg_remaining[3:5])))
             print("  BGP ID {}.{}.{}.{}".format(*data_msg_remaining[5:9]))
-        elif msg_type == 3:
+        elif msg_type == MSG_TYPE_NOTIFICATION:
             err_code = data_msg_remaining[0]
             err_subcode = data_msg_remaining[1]
             print("Notification message: code {}, subcode {}".format(err_code, err_subcode))
+        elif msg_type == MSG_TYPE_UPDATE:
+            withdrawn_len = get_word(data_msg_remaining[0:2])
+            tot_path_attr_len = get_word(data_msg_remaining[withdrawn_len+2:withdrawn_len+4])
+            nlri_data = data_msg_remaining[withdrawn_len + tot_path_attr_len + 4:]
+            pos = 0
+            print("NLRI in update:")
+            while pos < len(nlri_data):
+                prefix_len = nlri_data[pos]
+                pr_from = pos + 1
+                pr_to = pr_from + (prefix_len // 8) + (1 if prefix_len % 8 != 0 else 0)
+                prefix = nlri_data[pr_from:pr_to]
+                print("    {}/{}".format(".".join([str(i) for i in prefix]), prefix_len))
+                pos = pr_to
     return msg_type
 
 BGP_HEADER_MARKER = b'\xff' * 16
