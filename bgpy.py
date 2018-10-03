@@ -1,14 +1,17 @@
 #! /usr/bin/python3
 
 import socket
+from datetime import datetime
 
-DEBUG = True
+
+DEBUG = False
 
 HOST = "10.254.0.41"
 PORT = 179
 
 MY_AS = 65500
 MY_HOLDTIME = 90
+MY_BGP_ID = bytes([10, 0, 0, 10])
 
 MSG_TYPE_OPEN = 1
 MSG_TYPE_UPDATE = 2
@@ -38,6 +41,23 @@ def get_word(lst):
     return lst[0] * 256 + lst[1]
 
 
+def byte(b):
+    if b < 0 or b > 255:
+        raise WrongValue
+    return bytes([b])
+
+
+def two_bytes(w):
+    if w < 0 or w > 65535:
+        raise WrongValue
+    return bytes([w // 256, w % 256])
+
+
+def print_str_list(lst):
+    for line in lst:
+        print(line)
+
+
 def read_message_from_bgp_socket(s):
     message = {}
 
@@ -61,69 +81,92 @@ def read_message_from_bgp_socket(s):
     return message
 
 
-def dump_message(message):
+def decode_open_message(data_msg_remaining):
+    result = {"text": []}
+    result["text"].append("Open message: version {}".format(data_msg_remaining[0]))
+    result["text"].append("  AS {}".format(get_word(data_msg_remaining[1:3])))
+    result["text"].append("  Hold time {}".format(get_word(data_msg_remaining[3:5])))
+    result["text"].append("  BGP ID {}.{}.{}.{}".format(*data_msg_remaining[5:9]))
+    return result
+    # TODO: add other fields to result, not just text
+
+
+def decode_notification_message(data_msg_remaining):
+    result = {"text": []}
+    err_code = data_msg_remaining[0]
+    err_subcode = data_msg_remaining[1]
+    result["text"].append("Notification message: code {}, subcode {}".format(err_code, err_subcode))
+    return result
+
+
+def decode_update_message(data_msg_remaining):
+    result = {"text": []}
+    withdrawn_len = get_word(data_msg_remaining[0:2])
+    tot_path_attr_len = get_word(data_msg_remaining[withdrawn_len + 2:withdrawn_len + 4])
+    nlri_data = data_msg_remaining[withdrawn_len + tot_path_attr_len + 4:]
+    pos = 0
+    result["text"].append("  NLRI in update:")
+    while pos < len(nlri_data):
+        prefix_len = nlri_data[pos]
+        pr_from = pos + 1
+        pr_to = pr_from + (prefix_len // 8) + (1 if prefix_len % 8 != 0 else 0)
+        prefix = nlri_data[pr_from:pr_to]
+        result["text"].append("    {}/{}".format(".".join([str(i) for i in prefix]), prefix_len))
+        pos = pr_to
+    return result
+
+
+def dump_bgp_message(message):
+    print(datetime.now(), " Received BGP message:")
+    msg_length = message["length"]
+    print("  Message length: ", msg_length)
     msg_type = message["type"]
+    print("  Message type: {} ({})".format(msg_type, MSG_TYPE_NAMES[msg_type]))
+
     data_msg_remaining = message["remainder"]
     if msg_type == MSG_TYPE_OPEN:
-        print("Open message: version {}".format(data_msg_remaining[0]))
-        print("  AS {}".format(get_word(data_msg_remaining[1:3])))
-        print("  Hold time {}".format(get_word(data_msg_remaining[3:5])))
-        print("  BGP ID {}.{}.{}.{}".format(*data_msg_remaining[5:9]))
+        print_str_list(decode_open_message(data_msg_remaining)["text"])
     elif msg_type == MSG_TYPE_NOTIFICATION:
-        err_code = data_msg_remaining[0]
-        err_subcode = data_msg_remaining[1]
-        print("Notification message: code {}, subcode {}".format(err_code, err_subcode))
+        print_str_list(decode_notification_message(data_msg_remaining)["text"])
     elif msg_type == MSG_TYPE_UPDATE:
-        withdrawn_len = get_word(data_msg_remaining[0:2])
-        tot_path_attr_len = get_word(data_msg_remaining[withdrawn_len + 2:withdrawn_len + 4])
-        nlri_data = data_msg_remaining[withdrawn_len + tot_path_attr_len + 4:]
-        pos = 0
-        print("NLRI in update:")
-        while pos < len(nlri_data):
-            prefix_len = nlri_data[pos]
-            pr_from = pos + 1
-            pr_to = pr_from + (prefix_len // 8) + (1 if prefix_len % 8 != 0 else 0)
-            prefix = nlri_data[pr_from:pr_to]
-            print("    {}/{}".format(".".join([str(i) for i in prefix]), prefix_len))
-            pos = pr_to
+        print_str_list(decode_update_message(data_msg_remaining)["text"])
 
 
-def byte(b):
-    if b < 0 or b > 255:
-        raise WrongValue
-    return bytes([b])
+def keepalive_message():
+    return (BGP_HEADER_MARKER +
+                      two_bytes(16 + 2 + 1) +           # Keepalive message length
+                      byte(MSG_TYPE_KEEPALIVE))
 
 
-def two_bytes(w):
-    if w < 0 or w > 65535:
-        raise WrongValue
-    return bytes([w // 256, w % 256])
-
+def open_message(AS, holdtime, bgp_id):
+    return (BGP_HEADER_MARKER +
+                      two_bytes(29) +           # Open message length when no optional parameters are provided
+                      byte(MSG_TYPE_OPEN) +
+                      byte(BGP_VERSION) +       # Version
+                      two_bytes(AS) +        # My Autonomous System
+                      two_bytes(holdtime) +  # Hold Time
+                      bgp_id +   # BGP Identifier
+                      byte(0))                # Opt Parm Len
 
 if __name__ == "__main__":
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
 
-        sent = s.send(BGP_HEADER_MARKER +
-                      two_bytes(29) +           # Open message length when no optional parameters are provided
-                      byte(MSG_TYPE_OPEN) +
-                      byte(BGP_VERSION) +       # Version
-                      two_bytes(MY_AS) +        # My Autonomous System
-                      two_bytes(MY_HOLDTIME) +  # Hold Time
-                      bytes([10, 0, 0, 10]) +   # BGP Identifier
-                      byte(0))                  # Opt Parm Len
-        print("Sent {} bytes".format(sent))
+        sent = s.send(open_message(MY_AS, MY_HOLDTIME, MY_BGP_ID))
+        print("Sent {} bytes in Open message".format(sent))
 
-        sent = s.send(BGP_HEADER_MARKER +
-                      two_bytes(19) +           # Keepalive message length
-                      byte(MSG_TYPE_KEEPALIVE))
-        print("Sent {} bytes".format(sent))
+        sent = s.send(keepalive_message())
+        print("Sent {} bytes in Keepalive message".format(sent))
 
         while True:
             message = read_message_from_bgp_socket(s)
+            dump_bgp_message(message)
             if message["type"] == MSG_TYPE_NOTIFICATION:
                 break
-            dump_message(message)
+            elif message["type"] == MSG_TYPE_KEEPALIVE:
+                sent = s.send(keepalive_message())
+                print("Sent {} bytes in Keepalive message".format(sent))
+
 
 
 
