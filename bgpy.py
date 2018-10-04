@@ -99,13 +99,9 @@ def decode_notification_message(data_msg_remaining):
     return result
 
 
-def decode_update_message(data_msg_remaining):
+def decode_nlri_data(nlri_data):
     result = {"text": []}
-    withdrawn_len = get_word(data_msg_remaining[0:2])
-    tot_path_attr_len = get_word(data_msg_remaining[withdrawn_len + 2:withdrawn_len + 4])
-    nlri_data = data_msg_remaining[withdrawn_len + tot_path_attr_len + 4:]
     pos = 0
-    result["text"].append("  NLRI in update:")
     while pos < len(nlri_data):
         prefix_len = nlri_data[pos]
         pr_from = pos + 1
@@ -113,6 +109,21 @@ def decode_update_message(data_msg_remaining):
         prefix = nlri_data[pr_from:pr_to]
         result["text"].append("    {}/{}".format(".".join([str(i) for i in prefix]), prefix_len))
         pos = pr_to
+    return result
+
+
+def decode_update_message(data_msg_remaining):
+    result = {"text": []}
+    withdrawn_len = get_word(data_msg_remaining[0:2])
+    if withdrawn_len > 0:
+        withdrawn_routes_data = data_msg_remaining[2:withdrawn_len + 2]
+        result["text"].append("  Withdrawn Routes:")
+        result["text"] += decode_nlri_data(withdrawn_routes_data)["text"]
+    tot_path_attr_len = get_word(data_msg_remaining[withdrawn_len + 2:withdrawn_len + 4])
+    nlri_data = data_msg_remaining[withdrawn_len + tot_path_attr_len + 4:]
+    if len(nlri_data) > 0:
+        result["text"].append("  NLRI in update:")
+        result["text"] += decode_nlri_data(nlri_data)["text"]
     return result
 
 
