@@ -2,7 +2,9 @@
 
 import socket
 from datetime import datetime
-
+from lib.exceptions import WrongValue
+from lib.constants import *
+from lib.functions import *
 
 DEBUG = False
 
@@ -12,50 +14,6 @@ PORT = 179
 MY_AS = 65500
 MY_HOLDTIME = 90
 MY_BGP_ID = bytes([10, 0, 0, 10])
-
-MSG_TYPE_OPEN = 1
-MSG_TYPE_UPDATE = 2
-MSG_TYPE_NOTIFICATION = 3
-MSG_TYPE_KEEPALIVE = 4
-
-MSG_TYPE_NAMES = {
-    MSG_TYPE_OPEN: "OPEN",
-    MSG_TYPE_UPDATE: "UPDATE",
-    MSG_TYPE_NOTIFICATION: "NOTIFICATION",
-    MSG_TYPE_KEEPALIVE: "KEEPALIVE"
-}
-
-BGP_HEADER_LENGTH = 19
-BGP_VERSION = 4
-
-BGP_HEADER_MARKER = b'\xff' * 16
-
-
-class WrongValue(Exception):
-    pass
-
-
-def get_word(lst):
-    if len(lst) != 2:
-        raise WrongValue
-    return lst[0] * 256 + lst[1]
-
-
-def byte(b):
-    if b < 0 or b > 255:
-        raise WrongValue
-    return bytes([b])
-
-
-def two_bytes(w):
-    if w < 0 or w > 65535:
-        raise WrongValue
-    return bytes([w // 256, w % 256])
-
-
-def print_str_list(lst):
-    for line in lst:
-        print(line)
 
 
 def read_message_from_bgp_socket(s):
@@ -145,19 +103,19 @@ def dump_bgp_message(message):
 
 def keepalive_message():
     return (BGP_HEADER_MARKER +
-                      two_bytes(16 + 2 + 1) +           # Keepalive message length
+                      two_bytes(16 + 2 + 1) +   # Keepalive message length
                       byte(MSG_TYPE_KEEPALIVE))
 
 
 def open_message(AS, holdtime, bgp_id):
     return (BGP_HEADER_MARKER +
                       two_bytes(29) +           # Open message length when no optional parameters are provided
-                      byte(MSG_TYPE_OPEN) +
+                      byte(MSG_TYPE_OPEN) +     # Type 1 = Open
                       byte(BGP_VERSION) +       # Version
-                      two_bytes(AS) +        # My Autonomous System
-                      two_bytes(holdtime) +  # Hold Time
-                      bgp_id +   # BGP Identifier
-                      byte(0))                # Opt Parm Len
+                      two_bytes(AS) +           # My Autonomous System
+                      two_bytes(holdtime) +     # Hold Time
+                      bgp_id +                  # BGP Identifier
+                      byte(0))                  # Opt Parm Len
 
 if __name__ == "__main__":
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -177,9 +135,4 @@ if __name__ == "__main__":
             elif message["type"] == MSG_TYPE_KEEPALIVE:
                 sent = s.send(keepalive_message())
                 print("Sent {} bytes in Keepalive message".format(sent))
-
-
-
-
-
 
