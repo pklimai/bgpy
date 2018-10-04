@@ -1,42 +1,18 @@
 #! /usr/bin/python3
 
-import socket
 from datetime import datetime
-from lib.exceptions import WrongValue
 from lib.constants import *
 from lib.functions import *
-
-DEBUG = False
-
-HOST = "10.254.0.41"
-PORT = 179
-
-MY_AS = 65500
-MY_HOLDTIME = 90
-MY_BGP_ID = bytes([10, 0, 0, 10])
+from lib.bgp_client_session import BGPClientSession
+from lib.settings import *
 
 
-def read_message_from_bgp_socket(s):
-    message = {}
-
-    data_msg_header = s.recv(BGP_HEADER_LENGTH)
-    message["header"] = data_msg_header
-    if DEBUG: print("Received raw: ", repr(data_msg_header))
-
-    msg_length = get_word(data_msg_header[16:18])
-    message["length"] = msg_length
-    if DEBUG: print("Message length: ", msg_length)
-
-    msg_type = data_msg_header[18]
-    message["type"] = msg_type
-    if DEBUG: print("Message type: {} ({})".format(msg_type, MSG_TYPE_NAMES[msg_type]))
-
-    message["remainder"] = None
-    if msg_length > BGP_HEADER_LENGTH:
-        data_msg_remaining = s.recv(msg_length - BGP_HEADER_LENGTH)
-        message["remainder"] = data_msg_remaining
-        if DEBUG: print("Received raw, remainder: ", repr(data_msg_remaining))
-    return message
+class BGPMessage:
+    def __init__(self, type, length, header, remainder):
+        self.type = type
+        self.length = length
+        self.header = header
+        self.remainder = remainder
 
 
 def decode_open_message(data_msg_remaining):
@@ -118,21 +94,22 @@ def open_message(AS, holdtime, bgp_id):
                       byte(0))                  # Opt Parm Len
 
 if __name__ == "__main__":
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
 
-        sent = s.send(open_message(MY_AS, MY_HOLDTIME, MY_BGP_ID))
-        print("Sent {} bytes in Open message".format(sent))
+    session = BGPClientSession(HOST)
 
-        sent = s.send(keepalive_message())
-        print("Sent {} bytes in Keepalive message".format(sent))
+    sent = session.send(open_message(MY_AS, MY_HOLDTIME, MY_BGP_ID))
+    print("Sent {} bytes in Open message".format(sent))
 
-        while True:
-            message = read_message_from_bgp_socket(s)
-            dump_bgp_message(message)
-            if message["type"] == MSG_TYPE_NOTIFICATION:
-                break
-            elif message["type"] == MSG_TYPE_KEEPALIVE:
-                sent = s.send(keepalive_message())
-                print("Sent {} bytes in Keepalive message".format(sent))
+    sent = session.send(keepalive_message())
+    print("Sent {} bytes in Keepalive message".format(sent))
+
+    while True:
+        message = session.read_message()
+        dump_bgp_message(message)
+        if message["type"] == MSG_TYPE_NOTIFICATION:
+            session.close()
+            break
+        elif message["type"] == MSG_TYPE_KEEPALIVE:
+            sent = session.send(keepalive_message())
+            print("Sent {} bytes in Keepalive message".format(sent))
 
