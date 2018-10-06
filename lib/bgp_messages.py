@@ -46,6 +46,30 @@ class BGPOpenMessage(BGPMessage):
         result["text"].append("  AS {}".format(get_word(self.remainder[1:3])))
         result["text"].append("  Hold time {}".format(get_word(self.remainder[3:5])))
         result["text"].append("  BGP ID {}.{}.{}.{}".format(*self.remainder[5:9]))
+
+        opt_param_len = self.remainder[9]
+        result["text"].append("  Optional parameters length: {}".format(opt_param_len))
+        if opt_param_len > 0:
+            opt_params = self.remainder[10:10+opt_param_len]
+            pos = 0
+            while pos < opt_param_len:
+                param_type = opt_params[pos]
+                param_len = opt_params[pos+1]
+                param_val = opt_params[pos+2 : pos+2+param_len]
+                result["text"].append("    Optional parameter type {}, len {}, val {}".
+                                      format(param_type, param_len, param_val))
+                if param_type == PARAM_TYPE_CAPABILITY:
+                    capability_type = param_val[0]
+                    capability_len = param_val[1]
+                    capability_val = param_val[2 : 2+capability_len]
+                    result["text"].append("      Capability type {}, len {}, val {}".
+                                          format(capability_type, capability_len, capability_val))
+                    if capability_type == 1:
+                        afi = get_word(capability_val[0:2])
+                        safi = get_word(capability_val[2:4])
+                        result["text"].append("        Multiprotocol extensions AFI {}, SAFI {}".format(afi, safi))
+                    pos += (param_len + 2)
+
         return result
         # TODO: add other fields to result, not just text
 

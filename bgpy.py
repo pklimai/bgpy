@@ -8,19 +8,26 @@ from lib.settings import *
 
 def keepalive_message():
     return (BGP_HEADER_MARKER +
-                      two_bytes(16 + 2 + 1) +   # Keepalive message length
-                      byte(MSG_TYPE_KEEPALIVE))
+            two_bytes(16 + 2 + 1) +   # Keepalive message length
+            byte(MSG_TYPE_KEEPALIVE)
+            )
 
 
 def open_message(AS, holdtime, bgp_id):
+
+    # Multiprotocol extensions AFI 1, SAFI 1 and AFI 2, SAFI 1:
+    opt_params = b"\x02\x06\x01\x04\x00\x01\x00\x01" + b"\x02\x06\x01\x04\x00\x02\x00\x01"
+
     return (BGP_HEADER_MARKER +
-                      two_bytes(29) +           # Open message length when no optional parameters are provided
-                      byte(MSG_TYPE_OPEN) +     # Type 1 = Open
-                      byte(BGP_VERSION) +       # Version
-                      two_bytes(AS) +           # My Autonomous System
-                      two_bytes(holdtime) +     # Hold Time
-                      bgp_id +                  # BGP Identifier
-                      byte(0))                  # Opt Parm Len
+            two_bytes(29 + len(opt_params)) +     # 29 = Open message length when no optional parameters are provided
+            byte(MSG_TYPE_OPEN) +     # Type 1 = Open
+            byte(BGP_VERSION) +       # Version
+            two_bytes(AS) +           # My Autonomous System
+            two_bytes(holdtime) +     # Hold Time
+            bgp_id +                  # BGP Identifier
+            byte(len(opt_params)) +   # Opt Parm Len
+            opt_params
+            )
 
 if __name__ == "__main__":
 
