@@ -30,7 +30,6 @@ def open_message(AS, holdtime, bgp_id):
             )
 
 if __name__ == "__main__":
-
     session = BGPClientSession(HOST)
 
     sent = session.send(open_message(MY_AS, MY_HOLDTIME, MY_BGP_ID))

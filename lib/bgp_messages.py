@@ -42,10 +42,10 @@ class BGPOpenMessage(BGPMessage):
 
     def decode_message(self):
         result = {"text": []}
-        result["text"].append("Open message: version {}".format(self.remainder[0]))
-        result["text"].append("  AS {}".format(get_word(self.remainder[1:3])))
-        result["text"].append("  Hold time {}".format(get_word(self.remainder[3:5])))
-        result["text"].append("  BGP ID {}.{}.{}.{}".format(*self.remainder[5:9]))
+        result["text"].append("  BGP version: {}".format(self.remainder[0]))
+        result["text"].append("  AS: {}".format(get_word(self.remainder[1:3])))
+        result["text"].append("  Hold time: {}".format(get_word(self.remainder[3:5])))
+        result["text"].append("  BGP ID: {}.{}.{}.{}".format(*self.remainder[5:9]))
 
         opt_param_len = self.remainder[9]
         result["text"].append("  Optional parameters length: {}".format(opt_param_len))
@@ -99,7 +99,25 @@ class BGPUpdateMessage(BGPMessage):
             result["text"].append("  Withdrawn Routes:")
             result["text"] += decode_nlri_data(withdrawn_routes_data)["text"]
         tot_path_attr_len = get_word(self.remainder[withdrawn_len + 2:withdrawn_len + 4])
-        nlri_data = self.remainder[withdrawn_len + tot_path_attr_len + 4:]
+        path_attrs = self.remainder[withdrawn_len + 4:withdrawn_len + 4 + tot_path_attr_len]
+        ptr = 0
+        while ptr < len(path_attrs):
+            attr_flags = path_attrs[ptr + 0]
+            attr_typecode = path_attrs[ptr + 1]
+            # Defines whether the Attribute Length is one octet (if set to 0) or two octets (if set to 1):
+            ext_length_bit = to_bin_byte(attr_flags)[3]
+            if ext_length_bit == '0':
+                attr_length = path_attrs[ptr + 2]
+                attr_start_offset = 3
+            else:
+                attr_length = get_word(path_attrs[ptr + 2 : ptr + 4])
+                attr_start_offset = 4
+            attr_val = path_attrs[ptr + attr_start_offset : ptr + attr_start_offset + attr_length]
+            result["text"].append("    Attribute: typecode {}, value {}".format(attr_typecode, attr_val))
+            # result["text"].append("        Length {}, ext bit {}".format(attr_length, ext_length_bit))
+            ptr += (attr_start_offset + attr_length)
+
+        nlri_data = self.remainder[withdrawn_len + 4 + tot_path_attr_len:]
         if len(nlri_data) > 0:
             result["text"].append("  NLRI in update:")
             result["text"] += decode_nlri_data(nlri_data)["text"]

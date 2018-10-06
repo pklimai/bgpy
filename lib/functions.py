@@ -21,3 +21,10 @@ def two_bytes(w):
 def print_str_list(lst):
     for line in lst:
         print(line)
+
+
+def to_bin_byte(i):
+    res = bin(i).lstrip('0b')
+    if len(res) < 8:
+        res = '0' * (8 - len(res)) + res
+    return res
