@@ -1,5 +1,6 @@
 from lib.exceptions import WrongValue
 
+
 def get_word(lst):
     if len(lst) != 2:
         raise WrongValue
@@ -16,6 +17,12 @@ def two_bytes(w):
     if w < 0 or w > 65535:
         raise WrongValue
     return bytes([w // 256, w % 256])
+
+
+def four_bytes(w):
+    if w < 0 or w > 0xFFFFFFFF:
+        raise WrongValue
+    return bytes([(w // 256**3) % 256, (w // 256**2) % 256, (w // 256) % 256, w % 256])
 
 
 def print_str_list(lst):

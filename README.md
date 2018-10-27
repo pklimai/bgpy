@@ -8,10 +8,10 @@ Features so far:
 - Open connection to specified host (TCP client socket on port 179)
 - Send BGP Open and Keepalive messages so the session comes to Established state
 - Receive and decode messages from peer (Update partially decoded, so far)
+- Send the specified number of IPv4 host prefixes (/32) starting from a given prefix
 
 TODO:
-- Decode attributes and withdrawn routes in Update messages
-- Send Updates as specified by the user
+- Improve attributes and withdrawn routes decoding in Update messages
 - Support different NLRI families
 - Better way of passing parameters
 - Unit tests

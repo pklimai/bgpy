@@ -5,3 +5,7 @@ HOST = "10.254.0.41"
 MY_AS = 65500
 MY_HOLDTIME = 90
 MY_BGP_ID = bytes([10, 0, 0, 10])
+
+# Host (/32) routes to send
+ROUTE_SEND_START = 0x0A0A0000  # 10.10.0.0
+NUM_ROUTES_SEND = 2000

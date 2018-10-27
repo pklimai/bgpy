@@ -29,6 +29,31 @@ def open_message(AS, holdtime, bgp_id):
             opt_params
             )
 
+
+def update_message_host_route(host_route):
+    """
+    :param host_route: is 4-byte prefix e.g. bytes([10, 1, 1, 1]) for 10.1.1.1/32 route
+    """
+
+    path_attrs = bytes([])
+
+    path_attrs += two_bytes(0x4001) + byte(1) + byte(0)                     # Origin
+    path_attrs += two_bytes(0x4002) + byte(4) + byte(2) + byte(1) + two_bytes(MY_AS)            # AS-PATH
+    path_attrs += two_bytes(0x4003) + byte(4) + bytes([10, 254, 0, 251])    # Next-hop
+
+    upd_msg = two_bytes(len(path_attrs))   # Total path attr length
+    upd_msg += path_attrs
+
+    upd_msg += byte(32) + host_route
+
+    return (BGP_HEADER_MARKER +
+            two_bytes(21 + len(upd_msg)) +
+            byte(MSG_TYPE_UPDATE) +
+            two_bytes(0) +               # Withdrawn routes length
+            upd_msg
+            )
+
+
 if __name__ == "__main__":
     session = BGPClientSession(HOST)
 
@@ -37,6 +62,11 @@ if __name__ == "__main__":
 
     sent = session.send(keepalive_message())
     print("Sent {} bytes in Keepalive message".format(sent))
+
+    print("Sending {} routes to the peer...".format(NUM_ROUTES_SEND))
+    for r in range(ROUTE_SEND_START, ROUTE_SEND_START + NUM_ROUTES_SEND):
+        session.send(update_message_host_route(four_bytes(r)))
+    print("   ...done!")
 
     while True:
         message = session.read_message()

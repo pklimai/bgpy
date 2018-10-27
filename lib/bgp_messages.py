@@ -113,7 +113,8 @@ class BGPUpdateMessage(BGPMessage):
                 attr_length = get_word(path_attrs[ptr + 2 : ptr + 4])
                 attr_start_offset = 4
             attr_val = path_attrs[ptr + attr_start_offset : ptr + attr_start_offset + attr_length]
-            result["text"].append("    Attribute: typecode {}, value {}".format(attr_typecode, attr_val))
+            result["text"].append("    Attribute: flags {}, typecode {}, value {}".
+                                  format(attr_flags, attr_typecode, attr_val))
             # result["text"].append("        Length {}, ext bit {}".format(attr_length, ext_length_bit))
             ptr += (attr_start_offset + attr_length)
 
